@@ -36,7 +36,7 @@ $gitHubImage = '{0}/{1}/{2}:{3}' -f $Registry, $Organization.ToLower(), $imageNa
 
 Task -Title Test -Skip:$SkipTests -Command {
     $codeCoverageFilePath = "$codeCoverageFilePathPrefix.xml"
-    Exec "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*'"
+    Exec "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*' /property:ExcludeByFile='**/obj/**/*.cs'"
     Install-ReportGenerator
     $codeCoverageFilePaths = @(Resolve-Path "$codeCoverageFilePathPrefix*") -join ';'
     Exec "reportgenerator -reports:'$codeCoverageFilePaths' -targetdir:$codeCoverageReportDirPath -reporttypes:'TextSummary;HTML'"

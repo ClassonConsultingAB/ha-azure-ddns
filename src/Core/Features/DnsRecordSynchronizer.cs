@@ -9,7 +9,7 @@ public interface IDnsRecordSynchronizer
     Task SyncAsync(CancellationToken cancellationToken);
 }
 
-internal class DnsRecordSynchronizer(
+internal partial class DnsRecordSynchronizer(
     IIpAddressProvider ipAddressProvider, IDnsZoneClient dnsZoneClient, ILogger<IDnsRecordSynchronizer> logger)
     : IDnsRecordSynchronizer
 {
@@ -34,8 +34,7 @@ internal class DnsRecordSynchronizer(
         }
 
         await dnsZoneClient.SetARecordAddressAsync(currentAddress, cancellationToken);
-        logger.LogInformation(
-            "Updated A record from {OldAddress} to {NewAddress}", _lastKnownAddress, currentAddress);
+        LogUpdatedARecord(_lastKnownAddress, currentAddress);
         _lastKnownAddress = currentAddress;
         _loggedNoChangeSinceLastUpdate = false;
     }
@@ -44,7 +43,13 @@ internal class DnsRecordSynchronizer(
     {
         if (_loggedNoChangeSinceLastUpdate)
             return;
-        logger.LogInformation("No change needed, A record already set to {Address}", currentAddress);
+        LogNoChangeNeeded(currentAddress);
         _loggedNoChangeSinceLastUpdate = true;
     }
+
+    [LoggerMessage(LogLevel.Information, "Updated A record from {OldAddress} to {NewAddress}")]
+    partial void LogUpdatedARecord(IPAddress? oldAddress, IPAddress newAddress);
+
+    [LoggerMessage(LogLevel.Information, "No change needed, A record already set to {Address}")]
+    partial void LogNoChangeNeeded(IPAddress address);
 }

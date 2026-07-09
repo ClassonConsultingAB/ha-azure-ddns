@@ -1,7 +1,8 @@
-using System.ComponentModel.DataAnnotations;
 using Microsoft.Extensions.Configuration;
 
 namespace AzureDdns.Core;
+
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Global - Options
 
 public class DnsUpdaterOptions
 {

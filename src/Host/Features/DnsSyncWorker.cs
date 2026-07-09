@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace AzureDdns.Host.Features;
 
-internal class DnsSyncWorker(
+internal partial class DnsSyncWorker(
     IDnsRecordSynchronizer synchronizer, DnsUpdaterOptions options, ILogger<DnsSyncWorker> logger)
     : BackgroundService
 {
@@ -26,7 +26,10 @@ internal class DnsSyncWorker(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Failed to sync the DNS record");
+            LogFailedToSyncTheDnsRecord(ex);
         }
     }
+
+    [LoggerMessage(LogLevel.Error, "Failed to sync the DNS record")]
+    partial void LogFailedToSyncTheDnsRecord(Exception exception);
 }

@@ -28,6 +28,7 @@ builder.Services.AddAzureDdnsIntegration(builder.Configuration);
 builder.Services.AddHostedService<DnsSyncWorker>();
 
 builder.Build().Run();
+return;
 
 void SetEnvironmentVariableFromConfig(string environmentVariableName, string configKey)
 {

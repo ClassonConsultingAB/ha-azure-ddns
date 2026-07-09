@@ -32,7 +32,7 @@ public class DnsRecordSynchronizerSpecs
     }
 
     [Fact]
-    public async Task SyncAsync_updates_the_record_when_the_address_differs()
+    public async Task UpdatesTheRecordWhenTheAddressDiffers()
     {
         var currentIp = IPAddress.Parse("203.0.113.1");
         var (sut, _, dnsZoneClient, logger) = CreateSut(currentIp, IPAddress.Parse("203.0.113.2"));
@@ -45,7 +45,7 @@ public class DnsRecordSynchronizerSpecs
     }
 
     [Fact]
-    public async Task SyncAsync_does_not_update_and_logs_once_when_the_address_is_already_current()
+    public async Task DoesNotUpdateAndLogsOnceWhenTheAddressIsAlreadyCurrent()
     {
         var currentIp = IPAddress.Parse("203.0.113.1");
         var (sut, _, dnsZoneClient, logger) = CreateSut(currentIp, currentIp);
@@ -57,10 +57,10 @@ public class DnsRecordSynchronizerSpecs
     }
 
     [Fact]
-    public async Task SyncAsync_stays_silent_on_subsequent_checks_while_the_address_remains_unchanged()
+    public async Task StaysSilentOnSubsequentChecksWhileTheAddressRemainsUnchanged()
     {
         var currentIp = IPAddress.Parse("203.0.113.1");
-        var (sut, _, dnsZoneClient, logger) = CreateSut(currentIp, currentIp);
+        var (sut, _, _, logger) = CreateSut(currentIp, currentIp);
 
         await sut.SyncAsync(CancellationToken.None);
         await sut.SyncAsync(CancellationToken.None);
@@ -70,7 +70,7 @@ public class DnsRecordSynchronizerSpecs
     }
 
     [Fact]
-    public async Task SyncAsync_only_fetches_the_existing_record_once_across_multiple_calls()
+    public async Task OnlyFetchesTheExistingRecordOnceAcrossMultipleCalls()
     {
         var firstIp = IPAddress.Parse("203.0.113.1");
         var secondIp = IPAddress.Parse("203.0.113.2");
@@ -85,7 +85,7 @@ public class DnsRecordSynchronizerSpecs
     }
 
     [Fact]
-    public async Task SyncAsync_logs_no_change_again_after_a_later_update_stabilizes()
+    public async Task LogsNoChangeAgainAfterALaterUpdateStabilizes()
     {
         var firstIp = IPAddress.Parse("203.0.113.1");
         var secondIp = IPAddress.Parse("203.0.113.2");
