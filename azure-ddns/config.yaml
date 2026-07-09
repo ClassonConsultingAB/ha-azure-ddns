@@ -1,0 +1,25 @@
+name: "Azure DDNS"
+version: "0.1.8"
+slug: "azure-ddns"
+description: "Keeps an Azure DNS A record in sync with your public IP address"
+arch:
+  - aarch64
+image: "ghcr.io/classonconsultingab/ha-azure-ddns"
+options:
+  interval_seconds: 300
+  dns_zone_resource_id: ""
+  record_name: ""
+  ttl_seconds: 3600
+  ip_provider_endpoint: "https://icanhazip.com"
+  tenant_id: ""
+  client_id: ""
+  client_secret: ""
+schema:
+  interval_seconds: "int(30,)"
+  dns_zone_resource_id: "str"
+  record_name: "str"
+  ttl_seconds: "int(30,)"
+  ip_provider_endpoint: "url"
+  tenant_id: "str"
+  client_id: "str"
+  client_secret: "password"

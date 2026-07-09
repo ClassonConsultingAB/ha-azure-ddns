@@ -1,0 +1,7 @@
+.idea
+.azure
+bin
+obj
+output
+*.DotSettings.user
+.DS_Store

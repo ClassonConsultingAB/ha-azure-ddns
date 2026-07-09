@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/AzureDdns.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Host/">
+    <Project Path="src/Host/AzureDdns.Host.csproj" />
+  </Folder>
+  <Folder Name="/src/Integration/">
+    <Project Path="src/Integration/AzureDdns.Integration.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/Specs/">
+    <Project Path="tests/Specs/AzureDdns.Specs.csproj" />
+  </Folder>
+</Solution>
