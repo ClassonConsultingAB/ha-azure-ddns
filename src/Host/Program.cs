@@ -1,10 +1,6 @@
 using AzureDdns.Core;
 using AzureDdns.Host.Features;
 using AzureDdns.Integration;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddJsonFile("/data/options.json", optional: true);
