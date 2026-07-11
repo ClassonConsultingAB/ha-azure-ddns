@@ -54,6 +54,6 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $buildArgs = @('-Push', '-Channel', $env:CHANNEL)
-          if ($env:VERSION) { $buildArgs += '-Version'; $buildArgs += $env:VERSION }
+          $buildArgs = @{ Push = $true; Channel = $env:CHANNEL }
+          if ($env:VERSION) { $buildArgs['Version'] = $env:VERSION }
           ./build.ps1 @buildArgs
