@@ -1,0 +1,59 @@
+name: Build and publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: string
+        description: Image version formatted as X.Y.Z
+        required: false
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: ./scripts
+    shell: pwsh
+
+jobs:
+  BuildAndPublish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Configure git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Build and publish
+        env:
+          CHANNEL: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
+          VERSION: ${{ github.event.inputs.version }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $buildArgs = @('-Push', '-Channel', $env:CHANNEL)
+          if ($env:VERSION) { $buildArgs += '-Version'; $buildArgs += $env:VERSION }
+          ./build.ps1 @buildArgs

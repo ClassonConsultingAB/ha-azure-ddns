@@ -1,7 +1,7 @@
-name: "Azure DDNS"
+name: "Azure DDNS (Beta)"
 version: "0.0.0-placeholder"
-slug: "azure-ddns"
-description: "Keeps an Azure DNS A record in sync with your public IP address"
+slug: "azure-ddns-beta"
+description: "(Beta channel) Keeps an Azure DNS A record in sync with your public IP address"
 arch:
   - aarch64
 image: "ghcr.io/classonconsultingab/ha-azure-ddns"
