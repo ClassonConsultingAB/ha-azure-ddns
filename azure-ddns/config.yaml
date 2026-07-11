@@ -1,5 +1,5 @@
 name: "Azure DDNS"
-version: "0.1.4-publish-workflow0000"
+version: "0.1.8"
 slug: "azure-ddns"
 description: "Keeps an Azure DNS A record in sync with your public IP address"
 arch:
