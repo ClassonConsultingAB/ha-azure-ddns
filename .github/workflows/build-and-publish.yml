@@ -17,6 +17,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,6 +37,13 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Azure login
+        uses: azure/login@v3
+        with:
+          tenant-id: ${{ vars.TENANT_ID }}
+          client-id: ${{ vars.CLIENT_ID }}
+          subscription-id: ${{ vars.SUBSCRIPTION_ID }}
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
