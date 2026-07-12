@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
 ARG GITHUB_SOURCE_URL=https://nuget.pkg.github.com/ClassonConsultingAB/index.json
 WORKDIR /src
 RUN --mount=type=secret,id=github_token \
@@ -14,7 +14,8 @@ RUN dotnet restore ./src/Host/AzureDdns.Host.csproj
 COPY ./src ./src
 RUN dotnet publish ./src/Host/AzureDdns.Host.csproj -c Release -o /app/publish --no-restore
 
-FROM mcr.microsoft.com/dotnet/runtime:10.0 AS final
+FROM mcr.microsoft.com/dotnet/runtime:10.0-alpine AS final
 WORKDIR /app
+RUN apk update --no-cache
 COPY --from=build /app/publish .
 ENTRYPOINT ["dotnet", "AzureDdns.Host.dll"]
