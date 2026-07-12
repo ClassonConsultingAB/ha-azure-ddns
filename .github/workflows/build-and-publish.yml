@@ -32,7 +32,7 @@ jobs:
   BuildAndPublish:
     runs-on: ubuntu-latest
     environment:
-      name: no-deployment
+      name: non-prod
       deployment: false
 
     steps:
