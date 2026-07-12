@@ -7,20 +7,22 @@ namespace AzureDdns.Core;
 
 public static class ServiceCollectionExtensions
 {
-    public static IServiceCollection AddAzureDdnsCore(
-        this IServiceCollection services, IConfiguration configuration)
+    extension(IServiceCollection services)
     {
-        services.AddBoundOptions<DnsUpdaterOptions>(configuration);
-        services.AddSingleton<IDnsRecordSynchronizer, DnsRecordSynchronizer>();
-        return services;
-    }
+        // ReSharper disable once UnusedMethodReturnValue.Global - Convension
+        public IServiceCollection AddAzureDdnsCore(IConfiguration configuration)
+        {
+            services.AddBoundOptions<DnsUpdaterOptions>(configuration);
+            services.AddSingleton<IDnsRecordSynchronizer, DnsRecordSynchronizer>();
+            return services;
+        }
 
-    private static void AddBoundOptions<TOptions>(
-        this IServiceCollection services, IConfiguration configuration) where TOptions : class, new()
-    {
-        var options = new TOptions();
-        configuration.Bind(options);
-        Validator.ValidateObject(options, new ValidationContext(options), validateAllProperties: true);
-        services.AddSingleton(options);
+        public void AddBoundOptions<TOptions>(IConfiguration configuration) where TOptions : class, new()
+        {
+            var options = new TOptions();
+            configuration.Bind(options);
+            Validator.ValidateObject(options, new ValidationContext(options), validateAllProperties: true);
+            services.AddSingleton(options);
+        }
     }
 }

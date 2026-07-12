@@ -1,7 +1,9 @@
 param(
-    [switch]$SkipPush,
+    [switch]$Push,
     [switch]$SkipTests,
     [string]$Version = $null,
+    [ValidateSet('stable', 'beta')]
+    [string]$Channel = 'beta',
     [string]$Organization = 'ClassonConsultingAB',
     [string]$Repository = 'ha-azure-ddns',
     [string]$Registry = 'ghcr.io',
@@ -24,6 +26,14 @@ $slnPath = Join-Path $rootPath AzureDdns.slnx
 $testResultsFilePath = Join-Path $outputDirPath AzureDdns.trx
 $codeCoverageFilePathPrefix = Join-Path $outputDirPath AzureDdns.coverage
 $codeCoverageReportDirPath = Join-Path $outputDirPath AzureDdns.coveragereport
+$addonConfigDirNames = @{ stable = 'azure-ddns'; beta = 'azure-ddns-beta' }
+$activeAddonDirName = $addonConfigDirNames[$Channel]
+$addonConfigPath = Join-Path $rootPath "$activeAddonDirName/config.yaml"
+$licensePath = Join-Path $rootPath LICENSE
+$repositoryYamlPath = Join-Path $rootPath repository.yaml
+$publishReadmePath = Join-Path $rootPath PUBLISH_README.md
+$publishBranchName = 'publish'
+$publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
 if (Test-Path $outputDirPath) { Remove-Item $outputDirPath -Recurse }
 New-Item $outputDirPath -ItemType Directory | Out-Null
@@ -36,14 +46,14 @@ $gitHubImage = '{0}/{1}/{2}:{3}' -f $Registry, $Organization.ToLower(), $imageNa
 
 Task -Title Test -Skip:$SkipTests -Command {
     $codeCoverageFilePath = "$codeCoverageFilePathPrefix.xml"
-    Exec "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*'"
+    Exec "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*' /property:ExcludeByFile='**/obj/**/*.cs'"
     Install-ReportGenerator
     $codeCoverageFilePaths = @(Resolve-Path "$codeCoverageFilePathPrefix*") -join ';'
     Exec "reportgenerator -reports:'$codeCoverageFilePaths' -targetdir:$codeCoverageReportDirPath -reporttypes:'TextSummary;HTML'"
     Get-Content (Join-Path $codeCoverageReportDirPath Summary.txt)
 }
 
-Task -Title Login -Skip:$SkipPush -Command {
+Task -Title Login -Skip:(!$Push) -Command {
     Exec "echo $env:GH_TOKEN | docker login $Registry -u automation --password-stdin"
 }
 
@@ -64,11 +74,56 @@ Task -Title Build -Command {
         "--label org.opencontainers.image.revision=$($versionInfo.ShortSha)"
         "-t $gitHubImage"
     )
-    if (!$SkipPush) { $build_args += '--push' }
+    if ($Push) { $build_args += '--push' }
     Exec "docker build $($build_args -join ' ') $rootPath"
+}
+
+Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
+    # The '$publishBranchName' branch is the repository's default branch and is intentionally
+    # unprotected and has no branch-protection relationship to 'main'. Home Assistant fetches the
+    # add-on repository's default branch, so every publish checks it out in a worktree, updates only
+    # the channel being published (the other channel's config.yaml is already there, untouched), and
+    # pushes a normal commit. This keeps version-bump commits off 'main' entirely, so they never
+    # conflict with branch protection there and never affect GitVersion's commit-based version
+    # calculation.
+    Exec "git -C $rootPath worktree prune"
+    if (Test-Path $publishWorktreePath) { Remove-Item $publishWorktreePath -Recurse -Force }
+    if (Exec "git -C $rootPath branch --list $publishBranchName" -ReturnOutput) { Exec "git -C $rootPath branch -D $publishBranchName" }
+
+    $remotePublishRef = Exec "git -C $rootPath ls-remote origin $publishBranchName" -ReturnOutput
+    $publishBranchExistsRemotely = -not [string]::IsNullOrWhiteSpace($remotePublishRef)
+    if ($publishBranchExistsRemotely) {
+        Exec "git -C $rootPath fetch origin $publishBranchName"
+        Exec "git -C $rootPath worktree add -b $publishBranchName $publishWorktreePath origin/$publishBranchName"
+    }
+    else {
+        Exec "git -C $rootPath worktree add --orphan -b $publishBranchName $publishWorktreePath"
+    }
+
+    $addonConfigContent = Get-Content $addonConfigPath -Raw
+    $addonConfigContent = $addonConfigContent -replace '(?m)^version: ".*"$', "version: `"$containerImageVersion`""
+    $activeAddonDirPath = Join-Path $publishWorktreePath $activeAddonDirName
+    New-Item $activeAddonDirPath -ItemType Directory -Force | Out-Null
+    Set-Content (Join-Path $activeAddonDirPath config.yaml) -Value $addonConfigContent -NoNewline
+
+    Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
+    Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
+    Copy-Item $publishReadmePath (Join-Path $publishWorktreePath README.md)
+
+    Exec "git -C $publishWorktreePath add -A"
+    if (git -C $publishWorktreePath status --porcelain) {
+        Exec "git -C $publishWorktreePath commit -m 'Publish $Channel v$containerImageVersion'"
+        Exec "git -C $publishWorktreePath push origin HEAD:$publishBranchName"
+    }
+    Exec "git -C $rootPath worktree remove $publishWorktreePath --force"
 }
 
 Write-TaskSummary
 
 Write-Host "Image: $gitHubImage" -ForegroundColor Cyan
-Write-Host "Remember to set 'version: `"$containerImageVersion`"' in azure-ddns/config.yaml to match." -ForegroundColor Cyan
+if ($Push) {
+    Write-Host "Published '$publishBranchName' branch ($Channel channel) with version $containerImageVersion." -ForegroundColor Cyan
+}
+else {
+    Write-Host "Run with -Push to push the image and publish this version to the '$publishBranchName' branch." -ForegroundColor Cyan
+}

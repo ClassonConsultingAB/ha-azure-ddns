@@ -10,20 +10,6 @@ using Microsoft.Extensions.Configuration;
 
 namespace AzureDdns.Integration;
 
-public class AzureDnsZoneOptions
-{
-    [Required]
-    [ConfigurationKeyName("dns_zone_resource_id")]
-    public string DnsZoneResourceId { get; set; } = "";
-
-    [Required]
-    [ConfigurationKeyName("record_name")]
-    public string RecordName { get; set; } = "";
-
-    [ConfigurationKeyName("ttl_seconds")]
-    public int TtlSeconds { get; set; } = 3600;
-}
-
 internal class AzureDnsZoneClient(ArmClient armClient, AzureDnsZoneOptions options) : IDnsZoneClient
 {
     public async Task<IPAddress?> TryGetARecordAddressAsync(CancellationToken cancellationToken)
@@ -52,4 +38,20 @@ internal class AzureDnsZoneClient(ArmClient armClient, AzureDnsZoneOptions optio
 
     private DnsARecordCollection GetCollection() =>
         armClient.GetDnsZoneResource(new ResourceIdentifier(options.DnsZoneResourceId)).GetDnsARecords();
+}
+
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Global - Options
+
+public class AzureDnsZoneOptions
+{
+    [Required]
+    [ConfigurationKeyName("dns_zone_resource_id")]
+    public string DnsZoneResourceId { get; set; } = "";
+
+    [Required]
+    [ConfigurationKeyName("record_name")]
+    public string RecordName { get; set; } = "";
+
+    [ConfigurationKeyName("ttl_seconds")]
+    public int TtlSeconds { get; set; } = 3600;
 }

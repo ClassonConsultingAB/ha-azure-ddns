@@ -12,15 +12,15 @@ public class ServiceCollectionExtensionsSpecs
     [InlineData("dns_zone_resource_id")]
     [InlineData("record_name")]
     [InlineData("ip_provider_endpoint")]
-    public void AddAzureDdnsIntegration_throws_when_a_required_config_value_is_empty(string emptyKey)
+    public void ThrowsWhenARequiredConfigValueIsEmpty(string emptyKey)
     {
         var configValues = new Dictionary<string, string?>
         {
             ["dns_zone_resource_id"] = "some-id",
             ["record_name"] = "some-record",
-            ["ip_provider_endpoint"] = "https://icanhazip.com"
+            ["ip_provider_endpoint"] = "https://icanhazip.com",
+            [emptyKey] = ""
         };
-        configValues[emptyKey] = "";
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(configValues).Build();
         var services = new ServiceCollection();
 

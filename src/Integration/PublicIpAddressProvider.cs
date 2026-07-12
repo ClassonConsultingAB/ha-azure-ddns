@@ -2,16 +2,8 @@ using System.ComponentModel.DataAnnotations;
 using System.Net;
 using AzureDdns.Core.Abstractions;
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Http;
 
 namespace AzureDdns.Integration;
-
-public class IpProviderOptions
-{
-    [Required]
-    [ConfigurationKeyName("ip_provider_endpoint")]
-    public string Endpoint { get; set; } = "https://icanhazip.com";
-}
 
 internal class PublicIpAddressProvider(IHttpClientFactory httpClientFactory, IpProviderOptions options)
     : IIpAddressProvider
@@ -22,4 +14,13 @@ internal class PublicIpAddressProvider(IHttpClientFactory httpClientFactory, IpP
         var response = await client.GetStringAsync(options.Endpoint, cancellationToken);
         return IPAddress.Parse(response.Trim());
     }
+}
+
+// ReSharper disable AutoPropertyCanBeMadeGetOnly.Global - Options
+
+public class IpProviderOptions
+{
+    [Required]
+    [ConfigurationKeyName("ip_provider_endpoint")]
+    public string Endpoint { get; set; } = "https://icanhazip.com";
 }

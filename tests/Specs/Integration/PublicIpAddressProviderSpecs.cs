@@ -12,7 +12,7 @@ public class PublicIpAddressProviderSpecs : AzureDdnsIntegrationTestBase
     [Theory]
     [InlineData("https://icanhazip.com")]
     [InlineData("https://ifconfig.me/ip")]
-    public async Task GetPublicIpAddressAsync_returns_a_parseable_address_from_the_configured_endpoint(
+    public async Task ReturnsAParseableAddressFromTheConfiguredEndpoint(
         string endpoint)
     {
         var sut = CreateSut<IIpAddressProvider>(("ip_provider_endpoint", endpoint));

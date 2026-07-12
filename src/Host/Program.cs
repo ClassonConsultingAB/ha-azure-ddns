@@ -1,12 +1,15 @@
 using AzureDdns.Core;
 using AzureDdns.Host.Features;
 using AzureDdns.Integration;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 var builder = Host.CreateApplicationBuilder(args);
 builder.Configuration.AddJsonFile("/data/options.json", optional: true);
+
+builder.Logging.AddSimpleConsole(options =>
+{
+    options.SingleLine = true;
+    options.TimestampFormat = "[yyyy-MM-dd HH:mm:ss] ";
+});
 
 // DefaultAzureCredential's EnvironmentCredential (used by AddAzureDdnsIntegration below) reads these
 // standard Azure SDK env vars. Home Assistant options can't be exposed as env vars directly, so this
@@ -21,6 +24,7 @@ builder.Services.AddAzureDdnsIntegration(builder.Configuration);
 builder.Services.AddHostedService<DnsSyncWorker>();
 
 builder.Build().Run();
+return;
 
 void SetEnvironmentVariableFromConfig(string environmentVariableName, string configKey)
 {
