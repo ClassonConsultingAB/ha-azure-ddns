@@ -1,5 +1,5 @@
 name: "Azure DDNS (Beta)"
-version: "0.1.2-PullRequest0002-0008"
+version: "0.1.10-PullRequest0003-0004"
 slug: "azure-ddns-beta"
 description: "(Beta channel) Keeps an Azure DNS A record in sync with your public IP address"
 arch:
