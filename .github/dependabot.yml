@@ -1,0 +1,35 @@
+version: 2
+registries:
+  github-nuget:
+    type: nuget-feed
+    url: https://nuget.pkg.github.com/ClassonConsultingAB/index.json
+    username: automation
+    password: ${{secrets.PACKAGE_RESTORE}}
+
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    registries:
+      - github-nuget
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "16:00"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    groups:
+      all:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "sunday"
+      time: "16:00"
+    groups:
+      all:
+        patterns:
+          - "*"
