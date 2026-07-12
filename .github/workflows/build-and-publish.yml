@@ -31,7 +31,9 @@ defaults:
 jobs:
   BuildAndPublish:
     runs-on: ubuntu-latest
-    environment: non-prod
+    environment:
+      name: no-deployment
+      deployment: false
 
     steps:
       - name: Checkout repository
