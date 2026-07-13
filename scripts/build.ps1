@@ -121,6 +121,17 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 
     $unreleasedMatch = [regex]::Match((Get-Content $changelogPath -Raw), '(?ms)^##\s*Unreleased\s*\r?\n(.*?)(?=^##\s|\z)')
     $unreleasedBody = $unreleasedMatch.Groups[1].Value.Trim()
+
+    # Guards against publishing without having filled in the "Unreleased" delta: the hash of the
+    # delta is stored next to the published CHANGELOG.md, and if it matches the hash from the
+    # previous publish of this channel, the delta clearly hasn't been updated since.
+    $unreleasedHashPath = Join-Path $activeAddonDirPath CHANGELOG.hash
+    $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($unreleasedBody))) -Algorithm SHA256).Hash
+    if ((Test-Path $unreleasedHashPath) -and ((Get-Content $unreleasedHashPath -Raw).Trim() -eq $unreleasedHash)) {
+        throw "The CHANGELOG.md 'Unreleased' section hasn't changed since the last $Channel publish. Did you forget to fill in the changelog delta?"
+    }
+    Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline
+
     $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
 
     $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
