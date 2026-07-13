@@ -118,7 +118,19 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
     Set-Content (Join-Path $activeAddonDirPath config.yaml) -Value $addonConfigContent -NoNewline
     Copy-Item $iconPath (Join-Path $activeAddonDirPath icon.png)
     Copy-Item $docsPath (Join-Path $activeAddonDirPath DOCS.md)
-    Copy-Item $changelogPath (Join-Path $activeAddonDirPath CHANGELOG.md)
+
+    $unreleasedMatch = [regex]::Match((Get-Content $changelogPath -Raw), '(?ms)^##\s*Unreleased\s*\r?\n(.*?)(?=^##\s|\z)')
+    $unreleasedBody = $unreleasedMatch.Groups[1].Value.Trim()
+    $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
+
+    $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
+    $existingPublishedBody = ''
+    if (Test-Path $publishedChangelogPath) {
+        $existingPublishedBody = ((Get-Content $publishedChangelogPath -Raw) -replace '(?ms)^#\s*Changelog\s*\r?\n', '').Trim()
+    }
+    $combinedChangelogContent = "# Changelog`n`n$newChangelogEntry"
+    if ($existingPublishedBody) { $combinedChangelogContent += "`n$existingPublishedBody`n" }
+    Set-Content $publishedChangelogPath -Value $combinedChangelogContent -NoNewline
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
