@@ -28,10 +28,13 @@ $codeCoverageFilePathPrefix = Join-Path $outputDirPath AzureDdns.coverage
 $codeCoverageReportDirPath = Join-Path $outputDirPath AzureDdns.coveragereport
 $addonConfigDirNames = @{ stable = 'azure-ddns'; beta = 'azure-ddns-beta' }
 $activeAddonDirName = $addonConfigDirNames[$Channel]
-$addonConfigPath = Join-Path $rootPath "$activeAddonDirName/config.yaml"
+$homeAssistantDirPath = Join-Path $rootPath home-assistant
+$addonConfigPath = Join-Path $homeAssistantDirPath config.yaml
+$iconPath = Join-Path $homeAssistantDirPath icon.png
+$docsPath = Join-Path $homeAssistantDirPath DOCS.md
+$changelogPath = Join-Path $homeAssistantDirPath CHANGELOG.md
 $licensePath = Join-Path $rootPath LICENSE
 $repositoryYamlPath = Join-Path $rootPath repository.yaml
-$publishReadmePath = Join-Path $rootPath PUBLISH_README.md
 $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
@@ -62,6 +65,7 @@ Task -Title Build -Command {
     # machine/runner, via BuildKit + QEMU emulation. Without --push, the built image is loaded into
     # the local image store by default (docker build's normal behavior, unlike `docker buildx build`
     # which requires an explicit --load).
+    $haArch = @{ 'linux/arm64' = 'aarch64'; 'linux/amd64' = 'amd64' }[$Platform]
     $build_args = @(
         "--secret id=github_token,env=GH_TOKEN"
         "--platform $Platform"
@@ -72,6 +76,9 @@ Task -Title Build -Command {
         "--label org.opencontainers.image.version=$containerImageVersion"
         "--label org.opencontainers.image.created=$([DateTime]::UtcNow.ToString('o'))"
         "--label org.opencontainers.image.revision=$($versionInfo.ShortSha)"
+        "--label io.hass.version=$containerImageVersion"
+        "--label io.hass.type=app"
+        "--label io.hass.arch=$haArch"
         "-t $gitHubImage"
     )
     if ($Push) { $build_args += '--push' }
@@ -102,13 +109,20 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 
     $addonConfigContent = Get-Content $addonConfigPath -Raw
     $addonConfigContent = $addonConfigContent -replace '(?m)^version: ".*"$', "version: `"$containerImageVersion`""
+    if ($Channel -eq 'beta') {
+        $addonConfigContent = $addonConfigContent -replace '(?m)^(name: ".*)"$', '$1 (Beta)"'
+        $addonConfigContent = $addonConfigContent -replace '(?m)^(slug: ".*)"$', '$1-beta"'
+    }
     $activeAddonDirPath = Join-Path $publishWorktreePath $activeAddonDirName
     New-Item $activeAddonDirPath -ItemType Directory -Force | Out-Null
     Set-Content (Join-Path $activeAddonDirPath config.yaml) -Value $addonConfigContent -NoNewline
+    Copy-Item $iconPath (Join-Path $activeAddonDirPath icon.png)
+    Copy-Item $docsPath (Join-Path $activeAddonDirPath DOCS.md)
+    Copy-Item $changelogPath (Join-Path $activeAddonDirPath CHANGELOG.md)
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
-    Copy-Item $publishReadmePath (Join-Path $publishWorktreePath README.md)
+    if ($Channel -eq 'stable') { Copy-Item $docsPath (Join-Path $publishWorktreePath README.md) }
 
     Exec "git -C $publishWorktreePath add -A"
     if (git -C $publishWorktreePath status --porcelain) {
