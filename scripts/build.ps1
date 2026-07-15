@@ -158,7 +158,10 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
-    if ($Channel -eq 'stable') { Copy-Item $docsPath (Join-Path $publishWorktreePath README.md) }
+    if ($Channel -eq 'stable') {
+        $sourceCodeSection = "`n`n## Source code`n`nThis branch only contains the files Home Assistant needs to install the add-on. Source code, build`nscripts, and CI configuration live on the [``main``](https://github.com/$Organization/$Repository/tree/main) branch of this repository.`n"
+        Set-Content (Join-Path $publishWorktreePath README.md) -Value ((Get-Content $docsPath -Raw) + $sourceCodeSection) -NoNewline
+    }
 
     Exec "git -C $publishWorktreePath add -A"
     if (git -C $publishWorktreePath status --porcelain) {
