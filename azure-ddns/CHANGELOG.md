@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.13] - 2026-07-15
+
+### Added
+
+- Note in README.md about that source code live on the main branch of this repository.
+
 ## [0.1.12] - 2026-07-15
 
 ### Added

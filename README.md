@@ -22,3 +22,9 @@ The Entra ID app registration (service principal) used for `tenant_id`/`client_i
 be assigned the **DNS Zone Contributor** role on the target DNS zone (or on a resource group/subscription
 scope containing it), so it's allowed to update the A record. Assign this under the DNS zone's (or
 resource group's) **Access control (IAM) → Add role assignment** page in the Azure Portal.
+
+
+## Source code
+
+This branch only contains the files Home Assistant needs to install the add-on. Source code, build
+scripts, and CI configuration live on the [`main`](https://github.com/ClassonConsultingAB/ha-azure-ddns/tree/main) branch of this repository.
