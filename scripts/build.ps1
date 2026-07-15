@@ -122,26 +122,39 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
     $unreleasedMatch = [regex]::Match((Get-Content $changelogPath -Raw), '(?ms)^##\s*Unreleased\s*\r?\n(.*?)(?=^##\s|\z)')
     $unreleasedBody = $unreleasedMatch.Groups[1].Value.Trim()
 
-    # Guards against publishing without having filled in the "Unreleased" delta: the hash of the
-    # delta is stored next to the published CHANGELOG.md, and if it matches the hash from the
-    # previous publish of this channel, the delta clearly hasn't been updated since.
-    $unreleasedHashPath = Join-Path $activeAddonDirPath CHANGELOG.hash
-    $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($unreleasedBody))) -Algorithm SHA256).Hash
-    if ((Test-Path $unreleasedHashPath) -and ((Get-Content $unreleasedHashPath -Raw).Trim() -eq $unreleasedHash)) {
-        throw "The CHANGELOG.md 'Unreleased' section hasn't changed since the last $Channel publish. Did you forget to fill in the changelog delta?"
+    $isDependabot = $env:GITHUB_ACTOR -eq 'dependabot[bot]'
+    if ($isDependabot -and [string]::IsNullOrWhiteSpace($unreleasedBody)) {
+        $unreleasedBody = "### Changed`n`n- Bumped dependencies."
     }
-    Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline
 
-    $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
+    # Guards against publishing without having filled in the "Unreleased" delta: the hash of the
+    # delta is stored in a shared file at the publish worktree root, and if it matches the hash from
+    # the last stable publish, the delta clearly hasn't been updated since. Only stable publishes
+    # update this baseline, so repeated pushes to the same PR branch (beta) keep comparing against the
+    # same baseline and never re-trigger the guard, while a genuinely forgotten changelog still throws.
+    # Dependabot builds bypass the guard entirely, so consecutive dependency-bump releases can carry
+    # the same "Bumped dependencies." wording without tripping it.
+    $unreleasedHashPath = Join-Path $publishWorktreePath CHANGELOG.hash
+    $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($unreleasedBody))) -Algorithm SHA256).Hash
+    if (-not $isDependabot -and (Test-Path $unreleasedHashPath) -and ((Get-Content $unreleasedHashPath -Raw).Trim() -eq $unreleasedHash)) {
+        throw "The CHANGELOG.md 'Unreleased' section hasn't changed since the last stable publish. Did you forget to fill in the changelog delta?"
+    }
+    if ($Channel -eq 'stable') { Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline }
 
     $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
-    $existingPublishedBody = ''
-    if (Test-Path $publishedChangelogPath) {
-        $existingPublishedBody = ((Get-Content $publishedChangelogPath -Raw) -replace '(?ms)^#\s*Changelog\s*\r?\n', '').Trim()
+    if ($Channel -eq 'stable') {
+        $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
+        $existingPublishedBody = ''
+        if (Test-Path $publishedChangelogPath) {
+            $existingPublishedBody = ((Get-Content $publishedChangelogPath -Raw) -replace '(?ms)^#\s*Changelog\s*\r?\n', '').Trim()
+        }
+        $combinedChangelogContent = "# Changelog`n`n$newChangelogEntry"
+        if ($existingPublishedBody) { $combinedChangelogContent += "`n$existingPublishedBody`n" }
+        Set-Content $publishedChangelogPath -Value $combinedChangelogContent -NoNewline
     }
-    $combinedChangelogContent = "# Changelog`n`n$newChangelogEntry"
-    if ($existingPublishedBody) { $combinedChangelogContent += "`n$existingPublishedBody`n" }
-    Set-Content $publishedChangelogPath -Value $combinedChangelogContent -NoNewline
+    else {
+        Set-Content $publishedChangelogPath -Value "# Changelog`n`n## Unreleased`n`n$unreleasedBody`n" -NoNewline
+    }
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
