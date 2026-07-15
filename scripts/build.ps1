@@ -28,10 +28,13 @@ $codeCoverageFilePathPrefix = Join-Path $outputDirPath AzureDdns.coverage
 $codeCoverageReportDirPath = Join-Path $outputDirPath AzureDdns.coveragereport
 $addonConfigDirNames = @{ stable = 'azure-ddns'; beta = 'azure-ddns-beta' }
 $activeAddonDirName = $addonConfigDirNames[$Channel]
-$addonConfigPath = Join-Path $rootPath "$activeAddonDirName/config.yaml"
+$homeAssistantDirPath = Join-Path $rootPath home-assistant
+$addonConfigPath = Join-Path $homeAssistantDirPath config.yaml
+$iconPath = Join-Path $homeAssistantDirPath icon.png
+$docsPath = Join-Path $homeAssistantDirPath DOCS.md
+$changelogPath = Join-Path $homeAssistantDirPath CHANGELOG.md
 $licensePath = Join-Path $rootPath LICENSE
 $repositoryYamlPath = Join-Path $rootPath repository.yaml
-$publishReadmePath = Join-Path $rootPath PUBLISH_README.md
 $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
@@ -62,6 +65,7 @@ Task -Title Build -Command {
     # machine/runner, via BuildKit + QEMU emulation. Without --push, the built image is loaded into
     # the local image store by default (docker build's normal behavior, unlike `docker buildx build`
     # which requires an explicit --load).
+    $haArch = @{ 'linux/arm64' = 'aarch64'; 'linux/amd64' = 'amd64' }[$Platform]
     $build_args = @(
         "--secret id=github_token,env=GH_TOKEN"
         "--platform $Platform"
@@ -72,6 +76,9 @@ Task -Title Build -Command {
         "--label org.opencontainers.image.version=$containerImageVersion"
         "--label org.opencontainers.image.created=$([DateTime]::UtcNow.ToString('o'))"
         "--label org.opencontainers.image.revision=$($versionInfo.ShortSha)"
+        "--label io.hass.version=$containerImageVersion"
+        "--label io.hass.type=app"
+        "--label io.hass.arch=$haArch"
         "-t $gitHubImage"
     )
     if ($Push) { $build_args += '--push' }
@@ -102,13 +109,56 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 
     $addonConfigContent = Get-Content $addonConfigPath -Raw
     $addonConfigContent = $addonConfigContent -replace '(?m)^version: ".*"$', "version: `"$containerImageVersion`""
+    if ($Channel -eq 'beta') {
+        $addonConfigContent = $addonConfigContent -replace '(?m)^(name: ".*)"$', '$1 (Beta)"'
+        $addonConfigContent = $addonConfigContent -replace '(?m)^(slug: ".*)"$', '$1-beta"'
+    }
     $activeAddonDirPath = Join-Path $publishWorktreePath $activeAddonDirName
     New-Item $activeAddonDirPath -ItemType Directory -Force | Out-Null
     Set-Content (Join-Path $activeAddonDirPath config.yaml) -Value $addonConfigContent -NoNewline
+    Copy-Item $iconPath (Join-Path $activeAddonDirPath icon.png)
+    Copy-Item $docsPath (Join-Path $activeAddonDirPath DOCS.md)
+
+    $unreleasedMatch = [regex]::Match((Get-Content $changelogPath -Raw), '(?ms)^##\s*Unreleased\s*\r?\n(.*?)(?=^##\s|\z)')
+    $unreleasedBody = $unreleasedMatch.Groups[1].Value.Trim()
+
+    $isDependabot = $env:GITHUB_ACTOR -eq 'dependabot[bot]'
+    if ($isDependabot -and [string]::IsNullOrWhiteSpace($unreleasedBody)) {
+        $unreleasedBody = "### Changed`n`n- Bumped dependencies."
+    }
+
+    # Guards against publishing without having filled in the "Unreleased" delta: the hash of the
+    # delta is stored in a shared file at the publish worktree root, and if it matches the hash from
+    # the last stable publish, the delta clearly hasn't been updated since. Only stable publishes
+    # update this baseline, so repeated pushes to the same PR branch (beta) keep comparing against the
+    # same baseline and never re-trigger the guard, while a genuinely forgotten changelog still throws.
+    # Dependabot builds bypass the guard entirely, so consecutive dependency-bump releases can carry
+    # the same "Bumped dependencies." wording without tripping it.
+    $unreleasedHashPath = Join-Path $publishWorktreePath CHANGELOG.hash
+    $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($unreleasedBody))) -Algorithm SHA256).Hash
+    if (-not $isDependabot -and (Test-Path $unreleasedHashPath) -and ((Get-Content $unreleasedHashPath -Raw).Trim() -eq $unreleasedHash)) {
+        throw "The CHANGELOG.md 'Unreleased' section hasn't changed since the last stable publish. Did you forget to fill in the changelog delta?"
+    }
+    if ($Channel -eq 'stable') { Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline }
+
+    $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
+    if ($Channel -eq 'stable') {
+        $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
+        $existingPublishedBody = ''
+        if (Test-Path $publishedChangelogPath) {
+            $existingPublishedBody = ((Get-Content $publishedChangelogPath -Raw) -replace '(?ms)^#\s*Changelog\s*\r?\n', '').Trim()
+        }
+        $combinedChangelogContent = "# Changelog`n`n$newChangelogEntry"
+        if ($existingPublishedBody) { $combinedChangelogContent += "`n$existingPublishedBody`n" }
+        Set-Content $publishedChangelogPath -Value $combinedChangelogContent -NoNewline
+    }
+    else {
+        Set-Content $publishedChangelogPath -Value "# Changelog`n`n## Unreleased`n`n$unreleasedBody`n" -NoNewline
+    }
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
-    Copy-Item $publishReadmePath (Join-Path $publishWorktreePath README.md)
+    if ($Channel -eq 'stable') { Copy-Item $docsPath (Join-Path $publishWorktreePath README.md) }
 
     Exec "git -C $publishWorktreePath add -A"
     if (git -C $publishWorktreePath status --porcelain) {
