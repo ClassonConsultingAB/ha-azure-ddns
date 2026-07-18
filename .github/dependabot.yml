@@ -9,6 +9,7 @@ registries:
 updates:
   - package-ecosystem: "nuget"
     directory: "/"
+    target-branch: "main"
     registries:
       - github-nuget
     schedule:
@@ -25,6 +26,7 @@ updates:
 
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "main"
     schedule:
       interval: "weekly"
       day: "sunday"

@@ -35,6 +35,7 @@ $docsPath = Join-Path $homeAssistantDirPath DOCS.md
 $changelogPath = Join-Path $homeAssistantDirPath CHANGELOG.md
 $licensePath = Join-Path $rootPath LICENSE
 $repositoryYamlPath = Join-Path $rootPath repository.yaml
+$dependabotConfigPath = Join-Path $rootPath .github/dependabot.yml
 $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
@@ -158,6 +159,9 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
     Copy-Item $repositoryYamlPath (Join-Path $publishWorktreePath repository.yaml)
+    $publishGitHubDirPath = Join-Path $publishWorktreePath .github
+    New-Item $publishGitHubDirPath -ItemType Directory -Force | Out-Null
+    Copy-Item $dependabotConfigPath (Join-Path $publishGitHubDirPath dependabot.yml)
     if ($Channel -eq 'stable') {
         $sourceCodeSection = "`n`n## Source code`n`nThis branch only contains the files Home Assistant needs to install the add-on. Source code, build`nscripts, and CI configuration live on the [``main``](https://github.com/$Organization/$Repository/tree/main) branch of this repository.`n"
         Set-Content (Join-Path $publishWorktreePath README.md) -Value ((Get-Content $docsPath -Raw) + $sourceCodeSection) -NoNewline
