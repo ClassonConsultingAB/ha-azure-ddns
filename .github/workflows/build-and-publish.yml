@@ -13,6 +13,10 @@ on:
   pull_request:
     branches:
       - main
+  schedule:
+    # GitHub suppresses push-triggered workflow runs resulting from GITHUB_TOKEN actions, 
+    # such as from .github/dependabot.yml.
+    - cron: '0 20 * * 0'
 
 permissions:
   contents: write
@@ -25,7 +29,6 @@ concurrency:
 
 defaults:
   run:
-    working-directory: ./scripts
     shell: pwsh
 
 jobs:
@@ -65,6 +68,6 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $buildArgs = @{ Push = $true; Channel = $env:CHANNEL }
+          $buildArgs = @{ Publish = $true; Channel = $env:CHANNEL }
           if ($env:VERSION) { $buildArgs['Version'] = $env:VERSION }
-          ./build.ps1 @buildArgs
+          ./scripts/build.ps1 @buildArgs

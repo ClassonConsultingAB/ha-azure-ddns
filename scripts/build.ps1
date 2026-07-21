@@ -1,5 +1,5 @@
 param(
-    [switch]$Push,
+    [switch]$Publish,
     [switch]$SkipTests,
     [string]$Version = $null,
     [ValidateSet('stable', 'beta')]
@@ -32,13 +32,26 @@ $homeAssistantDirPath = Join-Path $rootPath home-assistant
 $addonConfigPath = Join-Path $homeAssistantDirPath config.yaml
 $iconPath = Join-Path $homeAssistantDirPath icon.png
 $docsPath = Join-Path $homeAssistantDirPath DOCS.md
-$changelogPath = Join-Path $homeAssistantDirPath CHANGELOG.md
+$changelogPath = Join-Path $homeAssistantDirPath unreleased.json
 $licensePath = Join-Path $rootPath LICENSE
 $repositoryYamlPath = Join-Path $rootPath repository.yaml
 $dependabotConfigPath = Join-Path $rootPath .github/dependabot.yml
 $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
+$standardChangelogHeadings = @('Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security')
+
+function ConvertTo-ChangelogMarkdown($Sections) {
+    $blocks = foreach ($heading in $standardChangelogHeadings) {
+        $bullets = @($Sections.$heading)
+        if ($bullets.Count -gt 0) {
+            $bulletLines = ($bullets | ForEach-Object { "- $_" }) -join "`n"
+            "### $heading`n`n$bulletLines"
+        }
+    }
+    $blocks -join "`n`n"
+}
+
 if (Test-Path $outputDirPath) { Remove-Item $outputDirPath -Recurse }
 New-Item $outputDirPath -ItemType Directory | Out-Null
 Install-GitVersion
@@ -47,6 +60,53 @@ $versionInfo = (Get-Content $versionFilePath | ConvertFrom-Json)
 
 $containerImageVersion = if ([string]::IsNullOrEmpty($Version)) { $versionInfo.LegacySemVerPadded } else { $Version }
 $gitHubImage = '{0}/{1}/{2}:{3}' -f $Registry, $Organization.ToLower(), $imageName, $containerImageVersion
+
+$unreleasedSections = Get-Content $changelogPath -Raw | ConvertFrom-Json -AsHashtable
+foreach ($heading in $standardChangelogHeadings) {
+    $unreleasedSections.$heading = @($unreleasedSections.$heading | Where-Object { $_ })
+}
+$unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes((Get-Content $changelogPath -Raw)))) -Algorithm SHA256).Hash
+$mergedBody = $null
+
+if ($Publish) {
+    $remotePublishRef = Exec "git -C $rootPath ls-remote origin $publishBranchName" -ReturnOutput
+    $lastReleasedSha = $null
+    $storedHash = $null
+    if (-not [string]::IsNullOrWhiteSpace($remotePublishRef)) {
+        Exec "git -C $rootPath fetch origin $publishBranchName"
+
+        $match = Exec "git -C $rootPath log origin/$publishBranchName --oneline --fixed-strings --grep=`"Publish $Channel v$containerImageVersion`"" -ReturnOutput
+        if (-not [string]::IsNullOrWhiteSpace($match)) {
+            Write-Host "Version $containerImageVersion is already published to the '$publishBranchName' branch. Nothing to do." -ForegroundColor Cyan
+            exit 0
+        }
+
+        $hashEntry = Exec "git -C $rootPath ls-tree origin/$publishBranchName -- CHANGELOG.hash" -ReturnOutput
+        if (-not [string]::IsNullOrWhiteSpace($hashEntry)) {
+            $storedHash = (Exec "git -C $rootPath show origin/${publishBranchName}:CHANGELOG.hash" -ReturnOutput).Trim()
+        }
+
+        $shaEntry = Exec "git -C $rootPath ls-tree origin/$publishBranchName -- CHANGELOG.sha" -ReturnOutput
+        if (-not [string]::IsNullOrWhiteSpace($shaEntry)) {
+            $lastReleasedSha = (Exec "git -C $rootPath show origin/${publishBranchName}:CHANGELOG.sha" -ReturnOutput).Trim()
+        }
+    }
+
+    $commitRange = if ($lastReleasedSha) { "$lastReleasedSha..HEAD" } else { 'HEAD' }
+    $commitAuthorEmails = @((Exec "git -C $rootPath log $commitRange --format=%ae" -ReturnOutput) | Where-Object { $_ })
+    $humanCommitCount = @($commitAuthorEmails | Where-Object { $_ -notlike '*49699333*' }).Count
+    $unreleasedUnchanged = $storedHash -and ($storedHash -eq $unreleasedHash)
+
+    if ($Channel -eq 'beta' -and $unreleasedUnchanged -and $humanCommitCount -gt 0) {
+        throw "home-assistant/unreleased.json hasn't changed since the last stable publish, but human commits exist since then. Did you forget to fill in the changelog delta?"
+    }
+
+    $dependabotCommits = @((Exec "git -C $rootPath log $commitRange --author=49699333 --format=%s" -ReturnOutput) | Where-Object { $_ })
+    if ($dependabotCommits.Count -gt 0) {
+        $unreleasedSections.Changed += $dependabotCommits | ForEach-Object { "$($_.TrimEnd('.'))." }
+    }
+    $mergedBody = ConvertTo-ChangelogMarkdown $unreleasedSections
+}
 
 Task -Title Test -Skip:$SkipTests -Command {
     $codeCoverageFilePath = "$codeCoverageFilePathPrefix.xml"
@@ -57,7 +117,7 @@ Task -Title Test -Skip:$SkipTests -Command {
     Get-Content (Join-Path $codeCoverageReportDirPath Summary.txt)
 }
 
-Task -Title Login -Skip:(!$Push) -Command {
+Task -Title Login -Skip:(!$Publish) -Command {
     Exec "echo $env:GH_TOKEN | docker login $Registry -u automation --password-stdin"
 }
 
@@ -82,11 +142,11 @@ Task -Title Build -Command {
         "--label io.hass.arch=$haArch"
         "-t $gitHubImage"
     )
-    if ($Push) { $build_args += '--push' }
+    if ($Publish) { $build_args += '--push' }
     Exec "docker build $($build_args -join ' ') $rootPath"
 }
 
-Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
+Task -Title 'Publish add-on config' -Skip:(!$Publish) -Command {
     # The '$publishBranchName' branch is the repository's default branch and is intentionally
     # unprotected and has no branch-protection relationship to 'main'. Home Assistant fetches the
     # add-on repository's default branch, so every publish checks it out in a worktree, updates only
@@ -120,31 +180,14 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
     Copy-Item $iconPath (Join-Path $activeAddonDirPath icon.png)
     Copy-Item $docsPath (Join-Path $activeAddonDirPath DOCS.md)
 
-    $unreleasedMatch = [regex]::Match((Get-Content $changelogPath -Raw), '(?ms)^##\s*Unreleased\s*\r?\n(.*?)(?=^##\s|\z)')
-    $unreleasedBody = $unreleasedMatch.Groups[1].Value.Trim()
-
-    $isDependabot = $env:GITHUB_ACTOR -eq 'dependabot[bot]'
-    if ($isDependabot -and [string]::IsNullOrWhiteSpace($unreleasedBody)) {
-        $unreleasedBody = "### Changed`n`n- Bumped dependencies."
-    }
-
-    # Guards against publishing without having filled in the "Unreleased" delta: the hash of the
-    # delta is stored in a shared file at the publish worktree root, and if it matches the hash from
-    # the last stable publish, the delta clearly hasn't been updated since. Only stable publishes
-    # update this baseline, so repeated pushes to the same PR branch (beta) keep comparing against the
-    # same baseline and never re-trigger the guard, while a genuinely forgotten changelog still throws.
-    # Dependabot builds bypass the guard entirely, so consecutive dependency-bump releases can carry
-    # the same "Bumped dependencies." wording without tripping it.
-    $unreleasedHashPath = Join-Path $publishWorktreePath CHANGELOG.hash
-    $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes($unreleasedBody))) -Algorithm SHA256).Hash
-    if (-not $isDependabot -and (Test-Path $unreleasedHashPath) -and ((Get-Content $unreleasedHashPath -Raw).Trim() -eq $unreleasedHash)) {
-        throw "The CHANGELOG.md 'Unreleased' section hasn't changed since the last stable publish. Did you forget to fill in the changelog delta?"
-    }
-    if ($Channel -eq 'stable') { Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline }
-
     $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
     if ($Channel -eq 'stable') {
-        $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$unreleasedBody`n"
+        $unreleasedHashPath = Join-Path $publishWorktreePath CHANGELOG.hash
+        $lastReleasedShaPath = Join-Path $publishWorktreePath CHANGELOG.sha
+        Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline
+        Exec "git -C $rootPath rev-parse HEAD" -ReturnOutput | Set-Content $lastReleasedShaPath -NoNewline
+
+        $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$mergedBody`n"
         $existingPublishedBody = ''
         if (Test-Path $publishedChangelogPath) {
             $existingPublishedBody = ((Get-Content $publishedChangelogPath -Raw) -replace '(?ms)^#\s*Changelog\s*\r?\n', '').Trim()
@@ -154,7 +197,7 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
         Set-Content $publishedChangelogPath -Value $combinedChangelogContent -NoNewline
     }
     else {
-        Set-Content $publishedChangelogPath -Value "# Changelog`n`n## Unreleased`n`n$unreleasedBody`n" -NoNewline
+        Set-Content $publishedChangelogPath -Value "# Changelog`n`n## Unreleased`n`n$mergedBody`n" -NoNewline
     }
 
     Copy-Item $licensePath (Join-Path $publishWorktreePath LICENSE)
@@ -178,9 +221,9 @@ Task -Title 'Publish add-on config' -Skip:(!$Push) -Command {
 Write-TaskSummary
 
 Write-Host "Image: $gitHubImage" -ForegroundColor Cyan
-if ($Push) {
+if ($Publish) {
     Write-Host "Published '$publishBranchName' branch ($Channel channel) with version $containerImageVersion." -ForegroundColor Cyan
 }
 else {
-    Write-Host "Run with -Push to push the image and publish this version to the '$publishBranchName' branch." -ForegroundColor Cyan
+    Write-Host "Run with -Publish to push the image and publish this version to the '$publishBranchName' branch." -ForegroundColor Cyan
 }
