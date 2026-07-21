@@ -1,5 +1,5 @@
 name: "Azure DDNS"
-version: "0.1.14"
+version: "0.1.17"
 slug: "azure-ddns"
 description: "Keeps an Azure DNS A record in sync with your public IP address"
 url: https://github.com/ClassonConsultingAB/ha-azure-ddns
