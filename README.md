@@ -26,6 +26,23 @@ The repository publishes two independent Home Assistant add-ons from the same `p
   it always reflects the latest in-progress change. Only the channel being published is updated each
   run — the other channel's `config.yaml` is carried forward unchanged from the current `publish` branch.
 
+## Updating the changelog
+
+[`home-assistant/unreleased.json`](home-assistant/unreleased.json) holds the not-yet-released changes (see [keepachangelog.com](https://keepachangelog.com/en/1.1.0/) for the category conventions). It's a JSON object with all six standard categories always present as arrays — `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, `Security` — leave a category's array empty if there's nothing to report under it:
+
+```json
+{
+  "Added": [],
+  "Changed": [],
+  "Deprecated": [],
+  "Removed": ["Something removed."],
+  "Fixed": [],
+  "Security": []
+}
+```
+
+When publishing, `build.ps1` merges this delta with the published `CHANGELOG.md` on the `publish` branch.
+
 ## Publishing a new image version
 
 Publishing is automated by [`.github/workflows/build-and-publish.yml`](.github/workflows/build-and-publish.yml):
@@ -43,10 +60,10 @@ To publish locally instead:
    ```
 3. Build, push, and publish:
    ```pwsh
-   ./scripts/build.ps1 -Push -Channel beta
+   ./scripts/build.ps1 -Publish -Channel beta
    ```
-   - Omit `-Push` to just build and test locally without pushing anything (the default).
-   - `-Channel` is `beta` by default (so a local `-Push` never accidentally bumps the stable channel);
+   - Omit `-Publish` to just build and test locally without pushing anything (the default).
+   - `-Channel` is `beta` by default (so a local `-Publish` never accidentally bumps the stable channel);
      pass `-Channel stable` deliberately to publish the stable add-on.
    - Use `-Version <x.y.z>` to force a specific version instead of the GitVersion-computed one.
    - Add `-Platform linux/amd64` too if testing on a non-arm64 dev machine.
