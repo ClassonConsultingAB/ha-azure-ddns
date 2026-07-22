@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.18] - 2026-07-22
+
+### Fixed
+
+- Dependabot auto-merge for GitHub Actions.
+
 ## [0.1.17] - 2026-07-21
 
 ### Added
