@@ -1,10 +1,10 @@
 {
-  "Added": [
-    "Scheduled publish of dependency updates."
-  ],
+  "Added": [],
   "Changed": [],
   "Deprecated": [],
   "Removed": [],
-  "Fixed": [],
+  "Fixed": [
+    "Dependabot auto-merge for GitHub Actions."
+  ],
   "Security": []
 }
