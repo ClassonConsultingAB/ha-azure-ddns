@@ -1,5 +1,5 @@
 name: "Azure DDNS (Beta)"
-version: "0.1.17-PullRequest0010-0002"
+version: "0.1.18-PullRequest0011-0003"
 slug: "azure-ddns-beta"
 description: "Keeps an Azure DNS A record in sync with your public IP address"
 url: https://github.com/ClassonConsultingAB/ha-azure-ddns
