@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.20] - 2026-08-30
+
+### Changed
+
+- Bump the all group with 1 update (#12).
+
+### Fixed
+
+- Container image now carries the correct description metadata.
+
 ## [0.1.18] - 2026-07-22
 
 ### Fixed
