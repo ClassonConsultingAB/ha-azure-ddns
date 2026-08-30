@@ -28,7 +28,7 @@ public class AzureDnsZoneClientSpecs : AzureDdnsIntegrationTestBase
     {
         // "no-records" is a pre-created A record set in the real zone with zero DnsARecords entries,
         // exercising the FirstOrDefault() empty-collection path distinct from the 404/missing case above.
-        var sut = CreateSut<IDnsZoneClient>(("record_name", "no-records"));
+        var sut = CreateSut<IDnsZoneClient>(("record_name", "ddns-no-records"));
 
         var result = await sut.TryGetARecordAddressAsync(CancellationToken.None);
 
@@ -36,26 +36,27 @@ public class AzureDnsZoneClientSpecs : AzureDdnsIntegrationTestBase
     }
 
     [Fact]
-    public async Task WhenSetThenGetReturnsTheValue()
+    public async Task GetReturnsAValue()
     {
         var sut = CreateSut<IDnsZoneClient>();
-        var address = IPAddress.Parse("203.0.113.10");
 
-        await sut.SetARecordAddressAsync(address, CancellationToken.None);
         var result = await sut.TryGetARecordAddressAsync(CancellationToken.None);
-
-        Assert.Equal(address, result);
+        
+        Assert.Equal(IPAddress.Parse("203.0.113.12"), result);
     }
-
+    
     [Fact]
+    [Trait(name: "Category", value: "SaveCosts")]
     public async Task SetOverwritesAnExistingDifferentValue()
     {
         var sut = CreateSut<IDnsZoneClient>();
+
         await sut.SetARecordAddressAsync(IPAddress.Parse("203.0.113.11"), CancellationToken.None);
+        var result1 = await sut.TryGetARecordAddressAsync(CancellationToken.None);
+        Assert.Equal(IPAddress.Parse("203.0.113.11"), result1);
 
         await sut.SetARecordAddressAsync(IPAddress.Parse("203.0.113.12"), CancellationToken.None);
-        var result = await sut.TryGetARecordAddressAsync(CancellationToken.None);
-
-        Assert.Equal(IPAddress.Parse("203.0.113.12"), result);
+        var result2 = await sut.TryGetARecordAddressAsync(CancellationToken.None);
+        Assert.Equal(IPAddress.Parse("203.0.113.12"), result2);
     }
 }

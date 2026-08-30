@@ -65,12 +65,12 @@ function Fail($Message) {
 
 function Install-GitVersion {
     if ($null -eq (Get-Command dotnet-gitversion -ErrorAction SilentlyContinue)) {
-        dotnet tool install --global GitVersion.Tool --version 5.*
+        dotnet tool install --global GitVersion.Tool --version 5.* | Out-Null
     }
 }
 
 function Install-ReportGenerator {
     if ($null -eq (Get-Command reportgenerator -ErrorAction SilentlyContinue)) {
-        dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.*
+        dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.* | Out-Null
     }
 }

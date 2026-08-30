@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using Azure;
 using Azure.Core;
@@ -25,6 +26,7 @@ internal class AzureDnsZoneClient(ArmClient armClient, AzureDnsZoneOptions optio
         }
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Save costs by not having a separate test zone")]
     public async Task SetARecordAddressAsync(IPAddress address, CancellationToken cancellationToken)
     {
         var data = new DnsARecordData

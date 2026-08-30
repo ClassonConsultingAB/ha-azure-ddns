@@ -4,7 +4,7 @@
   "Deprecated": [],
   "Removed": [],
   "Fixed": [
-    "Dependabot auto-merge for GitHub Actions."
+    "Container image now carries the correct description metadata."
   ],
   "Security": []
 }
