@@ -1,6 +1,7 @@
 param(
     [switch]$Publish,
     [switch]$SkipTests,
+    [switch]$SaveCosts,
     [string]$Version = $null,
     [ValidateSet('stable', 'beta')]
     [string]$Channel = 'beta',
@@ -52,13 +53,20 @@ function ConvertTo-ChangelogMarkdown($Sections) {
     $blocks -join "`n`n"
 }
 
-if (Test-Path $outputDirPath) { Remove-Item $outputDirPath -Recurse }
+if (Test-Path $outputDirPath) { Remove-Item $outputDirPath -Recurse -Force }
 New-Item $outputDirPath -ItemType Directory | Out-Null
-Install-GitVersion
-Exec "dotnet-gitversion $rootPath /output file /outputfile $versionFilePath"
-$versionInfo = (Get-Content $versionFilePath | ConvertFrom-Json)
 
-$containerImageVersion = if ([string]::IsNullOrEmpty($Version)) { $versionInfo.LegacySemVerPadded } else { $Version }
+function Get-Version {
+    if (![string]::IsNullOrEmpty($Version)) {
+        return $Version
+    }
+    Install-GitVersion
+    Exec "dotnet-gitversion $rootPath /output file /outputfile $versionFilePath"
+    $versionInfo = (Get-Content $versionFilePath | ConvertFrom-Json)
+    return $versionInfo.LegacySemVerPadded
+}
+
+$containerImageVersion = Get-Version
 $gitHubImage = '{0}/{1}/{2}:{3}' -f $Registry, $Organization.ToLower(), $imageName, $containerImageVersion
 
 $unreleasedSections = Get-Content $changelogPath -Raw | ConvertFrom-Json -AsHashtable
@@ -110,7 +118,11 @@ if ($Publish) {
 
 Task -Title Test -Skip:$SkipTests -Command {
     $codeCoverageFilePath = "$codeCoverageFilePathPrefix.xml"
-    Exec "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*' /property:ExcludeByFile='**/obj/**/*.cs'"
+    $cmd = "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*' /property:ExcludeByFile='**/obj/**/*.cs'"
+    if ($SaveCosts) {
+        $cmd += " --filter 'Category!=SaveCosts'"
+    }
+    Exec $cmd
     Install-ReportGenerator
     $codeCoverageFilePaths = @(Resolve-Path "$codeCoverageFilePathPrefix*") -join ';'
     Exec "reportgenerator -reports:'$codeCoverageFilePaths' -targetdir:$codeCoverageReportDirPath -reporttypes:'TextSummary;HTML'"
@@ -127,16 +139,17 @@ Task -Title Build -Command {
     # the local image store by default (docker build's normal behavior, unlike `docker buildx build`
     # which requires an explicit --load).
     $haArch = @{ 'linux/arm64' = 'aarch64'; 'linux/amd64' = 'amd64' }[$Platform]
+    $shortSha = Exec "git -C $rootPath rev-parse --short HEAD" -ReturnOutput
     $build_args = @(
         "--secret id=github_token,env=GH_TOKEN"
         "--platform $Platform"
         "--label org.opencontainers.image.title=$Repository"
-        '--label org.opencontainers.image.description='
+        '--label org.opencontainers.image.description=''Keeps an Azure DNS A record in sync with your public IP address'''
         "--label org.opencontainers.image.url=https://github.com/$Organization/$Repository"
         "--label org.opencontainers.image.source=https://github.com/$Organization/$Repository"
         "--label org.opencontainers.image.version=$containerImageVersion"
         "--label org.opencontainers.image.created=$([DateTime]::UtcNow.ToString('o'))"
-        "--label org.opencontainers.image.revision=$($versionInfo.ShortSha)"
+        "--label org.opencontainers.image.revision=$shortSha"
         "--label io.hass.version=$containerImageVersion"
         "--label io.hass.type=app"
         "--label io.hass.arch=$haArch"

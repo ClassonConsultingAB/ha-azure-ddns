@@ -4,7 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
-namespace AzureDdns.Specs;
+namespace AzureDdns.Specs.Core;
 
 public class ServiceCollectionExtensionsSpecs
 {

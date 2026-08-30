@@ -20,10 +20,10 @@ public abstract class AzureDdnsIntegrationTestBase : IDisposable
         var configValues = new Dictionary<string, string?>
         {
             ["dns_zone_resource_id"] =
-                "/subscriptions/efd58bfe-18fe-47f3-ab30-2d5096d9149e/resourceGroups/ha-azure-dns-local" +
-                "/providers/Microsoft.Network/dnsZones/classon-local.eu",
-            ["record_name"] = "integrations-test",
-            ["ttl_seconds"] = "60",
+                // Using the production DNZ zone instead of a separate one for tests only saves me 60 SEK per year
+                "/subscriptions/1fda8046-ed5e-4430-a580-c147285495ae/resourceGroups/dns-rg/providers/Microsoft.Network/dnszones/classon.eu",
+            ["record_name"] = "ddns-integrations-test",
+            ["ttl_seconds"] = "0",
             ["ip_provider_endpoint"] = "https://icanhazip.com"
         };
         foreach (var (key, value) in configOverrides)

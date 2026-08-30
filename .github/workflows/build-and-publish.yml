@@ -68,6 +68,4 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          $buildArgs = @{ Publish = $true; Channel = $env:CHANNEL }
-          if ($env:VERSION) { $buildArgs['Version'] = $env:VERSION }
-          ./scripts/build.ps1 @buildArgs
+          ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish -SaveCosts

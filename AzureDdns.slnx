@@ -9,8 +9,7 @@
   <Folder Name="/src/Integration/">
     <Project Path="src/Integration/AzureDdns.Integration.csproj" />
   </Folder>
-  <Folder Name="/tests/" />
-  <Folder Name="/tests/Specs/">
-    <Project Path="tests/Specs/AzureDdns.Specs.csproj" />
+  <Folder Name="/specs/Specs/">
+    <Project Path="specs/Specs/AzureDdns.Specs.csproj" />
   </Folder>
 </Solution>
