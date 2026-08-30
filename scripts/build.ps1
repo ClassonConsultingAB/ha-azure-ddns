@@ -61,7 +61,7 @@ function Get-Version {
         return $Version
     }
     Install-GitVersion
-    Exec "dotnet-gitversion $rootPath /output file /outputfile $versionFilePath"
+    Exec "dotnet-gitversion $rootPath /output file /outputfile $versionFilePath" | Out-Null
     $versionInfo = (Get-Content $versionFilePath | ConvertFrom-Json)
     return $versionInfo.LegacySemVerPadded
 }
