@@ -4,8 +4,9 @@
 
 ### Changed
 
-- Merge fb5610c33a49ad2c13a56ebc189df7668b9be56c into 8b24c85c72be45a9b67de084962ef06ed0bb1d06.
+- Merge 1be632fdd71ddd2f4499ae93059f9c1c8917bf54 into dbd65eea96a7db3874b8c7b318c73e8481711589.
 - Bump the all group with 1 update.
+- Bump the all group with 1 update (#14).
 
 ### Fixed
 
