@@ -7,6 +7,6 @@ $ErrorActionPreference = 'Stop'
 
 Import-Module "$PSScriptRoot/modules/BuildTasks/BuildTasks.psm1" -Force
 
-$templateFilePath = Join-Path $PSScriptRoot '../infra/main.bicep'
+$templateFilePath = Join-Path $PSScriptRoot '../infra/main.bicep' | Resolve-Path -Relative
 
 Exec "az deployment sub create --subscription $SubscriptionId --location $Location --name ha-azure-ddns-dns --template-file $templateFilePath --output none"

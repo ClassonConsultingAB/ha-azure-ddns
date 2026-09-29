@@ -75,7 +75,7 @@ jobs:
           VERSION: ${{ github.event.inputs.version }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish -SaveCosts
+          ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish
 
       - name: Clean up DNS zone
         if: always()
