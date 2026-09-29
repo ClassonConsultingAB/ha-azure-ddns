@@ -1,10 +1,8 @@
 {
   "Added": [],
-  "Changed": [],
+  "Changed": ["Infrastructure setup and teardown during CI"],
   "Deprecated": [],
   "Removed": [],
-  "Fixed": [
-    "Container image now carries the correct description metadata."
-  ],
+  "Fixed": [],
   "Security": []
 }

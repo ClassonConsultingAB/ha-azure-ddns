@@ -46,7 +46,6 @@ public class AzureDnsZoneClientSpecs : AzureDdnsIntegrationTestBase
     }
     
     [Fact]
-    [Trait(name: "Category", value: "SaveCosts")]
     public async Task SetOverwritesAnExistingDifferentValue()
     {
         var sut = CreateSut<IDnsZoneClient>();

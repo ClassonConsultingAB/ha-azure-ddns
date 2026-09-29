@@ -78,4 +78,17 @@ To publish locally instead:
   pulls the new image tag and restarts the add-on.
 - **Verifying it's working**: Open the add-on's Logs tab and confirm the DNS record sync log output.
 
+## Local development / integration tests
 
+The integration tests in `specs/Specs/Integration` run against a real Azure DNS zone. The zone and its seed records are defined in the `infra` folder.
+
+Example scenario:
+
+```pwsh
+./scripts/infra-up.ps1
+dotnet test
+./scripts/infra-down.ps1
+```
+
+- `infra-up.ps1` creates `rg-dns` and the zone, and resets the seed records. It is safe to re-run.
+- `infra-down.ps1` deletes the whole `rg-dns` resource group and waits for the deletion to finish.

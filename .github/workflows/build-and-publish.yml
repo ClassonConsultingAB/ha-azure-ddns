@@ -34,6 +34,9 @@ defaults:
 jobs:
   BuildAndPublish:
     runs-on: ubuntu-latest
+    concurrency:
+      group: ha-azure-ddns-dns-zone
+      cancel-in-progress: false
     environment:
       name: non-prod
       deployment: false
@@ -50,6 +53,10 @@ jobs:
           tenant-id: ${{ vars.TENANT_ID }}
           client-id: ${{ vars.CLIENT_ID }}
           subscription-id: ${{ vars.SUBSCRIPTION_ID }}
+
+      - name: Provision DNS zone
+        run: |
+          ./scripts/infra-up.ps1
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -69,3 +76,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish -SaveCosts
+
+      - name: Clean up DNS zone
+        if: always()
+        run: |
+          ./scripts/infra-down.ps1
