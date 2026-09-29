@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.23] - 2026-09-29
+
+### Changed
+
+- Infrastructure setup and teardown during CI
+- Bump the all group with 1 update (#15).
+- Bump the all group with 1 update (#14).
+
 ## [0.1.20] - 2026-08-30
 
 ### Changed
