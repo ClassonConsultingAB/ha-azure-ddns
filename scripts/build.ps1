@@ -1,7 +1,6 @@
 param(
     [switch]$Publish,
     [switch]$SkipTests,
-    [switch]$SaveCosts,
     [string]$Version = $null,
     [ValidateSet('stable', 'beta')]
     [string]$Channel = 'beta',
@@ -119,9 +118,6 @@ if ($Publish) {
 Task -Title Test -Skip:$SkipTests -Command {
     $codeCoverageFilePath = "$codeCoverageFilePathPrefix.xml"
     $cmd = "dotnet test $slnPath --logger 'trx;LogFileName=$testResultsFilePath' /property:CollectCoverage=True /property:CoverletOutputFormat=opencover /property:CoverletOutput=$codeCoverageFilePath /property:Exclude='[System.*]*' /property:ExcludeByFile='**/obj/**/*.cs'"
-    if ($SaveCosts) {
-        $cmd += " --filter 'Category!=SaveCosts'"
-    }
     Exec $cmd
     Install-ReportGenerator
     $codeCoverageFilePaths = @(Resolve-Path "$codeCoverageFilePathPrefix*") -join ';'

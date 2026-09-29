@@ -26,7 +26,6 @@ internal class AzureDnsZoneClient(ArmClient armClient, AzureDnsZoneOptions optio
         }
     }
 
-    [ExcludeFromCodeCoverage(Justification = "Save costs by not having a separate test zone")]
     public async Task SetARecordAddressAsync(IPAddress address, CancellationToken cancellationToken)
     {
         var data = new DnsARecordData
