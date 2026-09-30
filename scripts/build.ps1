@@ -39,6 +39,7 @@ $repositoryYamlPath = Join-Path $rootPath repository.yaml
 $dependabotConfigPath = Join-Path $rootPath .github/dependabot.yml
 $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
+$lastStableReleaseFileName = 'last-stable-release.json'
 $imageName = $Repository.ToLower()
 $standardChangelogHeadings = @('Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security')
 # Paths whose changes affect what runs in production (the image) or what Home Assistant shows for the
@@ -85,14 +86,14 @@ $unreleasedSections = Get-Content $changelogPath -Raw | ConvertFrom-Json -AsHash
 foreach ($heading in $standardChangelogHeadings) {
     $unreleasedSections.$heading = @($unreleasedSections.$heading | Where-Object { $_ })
 }
-$unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes((Get-Content $changelogPath -Raw)))) -Algorithm SHA256).Hash
+$unreleasedJsonSha256 = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes((Get-Content $changelogPath -Raw)))) -Algorithm SHA256).Hash
 $mergedBody = $null
 $shouldPublish = $false
 
 if ($Publish) {
     $remotePublishRef = Exec "git -C $rootPath ls-remote origin $publishBranchName" -ReturnOutput
-    $lastReleasedSha = $null
-    $storedHash = $null
+    $lastStableSourceCommit = $null
+    $lastStableUnreleasedJsonSha256 = $null
     if (-not [string]::IsNullOrWhiteSpace($remotePublishRef)) {
         Exec "git -C $rootPath fetch origin $publishBranchName"
 
@@ -102,38 +103,35 @@ if ($Publish) {
             exit 0
         }
 
-        $hashEntry = Exec "git -C $rootPath ls-tree origin/$publishBranchName -- CHANGELOG.hash" -ReturnOutput
-        if (-not [string]::IsNullOrWhiteSpace($hashEntry)) {
-            $storedHash = (Exec "git -C $rootPath show origin/${publishBranchName}:CHANGELOG.hash" -ReturnOutput).Trim()
-        }
-
-        $shaEntry = Exec "git -C $rootPath ls-tree origin/$publishBranchName -- CHANGELOG.sha" -ReturnOutput
-        if (-not [string]::IsNullOrWhiteSpace($shaEntry)) {
-            $lastReleasedSha = (Exec "git -C $rootPath show origin/${publishBranchName}:CHANGELOG.sha" -ReturnOutput).Trim()
+        $lastStableReleaseEntry = Exec "git -C $rootPath ls-tree origin/$publishBranchName -- $lastStableReleaseFileName" -ReturnOutput
+        if (-not [string]::IsNullOrWhiteSpace($lastStableReleaseEntry)) {
+            $lastStableRelease = (Exec "git -C $rootPath show origin/${publishBranchName}:$lastStableReleaseFileName" -ReturnOutput) -join "`n" | ConvertFrom-Json
+            $lastStableSourceCommit = $lastStableRelease.sourceCommit
+            $lastStableUnreleasedJsonSha256 = $lastStableRelease.unreleasedJsonSha256
         }
     }
 
-    if ($lastReleasedSha) {
-        git -C $rootPath cat-file -e "$lastReleasedSha^{commit}" 2>$null
+    if ($lastStableSourceCommit) {
+        git -C $rootPath cat-file -e "$lastStableSourceCommit^{commit}" 2>$null
         if ($LASTEXITCODE -ne 0) {
-            Write-Warning "Last released commit $lastReleasedSha was not found in history. Assuming production code has changed."
-            $lastReleasedSha = $null
+            Write-Warning "Last stable source commit $lastStableSourceCommit was not found in history. Assuming production code has changed."
+            $lastStableSourceCommit = $null
         }
         $global:LASTEXITCODE = 0
     }
 
-    if ($lastReleasedSha) {
-        $changedProductionFiles = @((Exec "git -C $rootPath diff --name-only $lastReleasedSha HEAD -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
+    if ($lastStableSourceCommit) {
+        $changedProductionFiles = @((Exec "git -C $rootPath diff --name-only $lastStableSourceCommit HEAD -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
         $hasProductionChanges = $changedProductionFiles.Count -gt 0
     }
     else {
         $hasProductionChanges = $true
     }
 
-    $commitRange = if ($lastReleasedSha) { "$lastReleasedSha..HEAD" } else { 'HEAD' }
+    $commitRange = if ($lastStableSourceCommit) { "$lastStableSourceCommit..HEAD" } else { 'HEAD' }
     $commitAuthorEmails = @((Exec "git -C $rootPath log $commitRange --format=%ae -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
     $humanCommitCount = @($commitAuthorEmails | Where-Object { $_ -notlike "*$dependabotAuthorId*" }).Count
-    $unreleasedUnchanged = $storedHash -and ($storedHash -eq $unreleasedHash)
+    $unreleasedUnchanged = $lastStableUnreleasedJsonSha256 -and ($lastStableUnreleasedJsonSha256 -eq $unreleasedJsonSha256)
 
     if ($Channel -eq 'beta' -and $unreleasedUnchanged -and $humanCommitCount -gt 0) {
         throw "home-assistant/unreleased.json hasn't changed since the last stable publish, but human commits touching production code exist since then. Did you forget to fill in the changelog delta?"
@@ -233,10 +231,11 @@ Task -Title 'Publish add-on config' -Skip:(!$shouldPublish) -Command {
 
     $publishedChangelogPath = Join-Path $activeAddonDirPath CHANGELOG.md
     if ($Channel -eq 'stable') {
-        $unreleasedHashPath = Join-Path $publishWorktreePath CHANGELOG.hash
-        $lastReleasedShaPath = Join-Path $publishWorktreePath CHANGELOG.sha
-        Set-Content $unreleasedHashPath -Value $unreleasedHash -NoNewline
-        Exec "git -C $rootPath rev-parse HEAD" -ReturnOutput | Set-Content $lastReleasedShaPath -NoNewline
+        $lastStableRelease = [ordered]@{
+            sourceCommit         = (Exec "git -C $rootPath rev-parse HEAD" -ReturnOutput).Trim()
+            unreleasedJsonSha256 = $unreleasedJsonSha256
+        }
+        Set-Content (Join-Path $publishWorktreePath $lastStableReleaseFileName) -Value ($lastStableRelease | ConvertTo-Json)
 
         $newChangelogEntry = "## [$containerImageVersion] - $((Get-Date).ToUniversalTime().ToString('yyyy-MM-dd'))`n`n$mergedBody`n"
         $existingPublishedBody = ''
