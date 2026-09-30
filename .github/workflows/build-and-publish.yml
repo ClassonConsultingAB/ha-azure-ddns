@@ -7,16 +7,17 @@ on:
         type: string
         description: Image version formatted as X.Y.Z
         required: false
+      force:
+        type: boolean
+        description: Publish even if no production code has changed
+        required: false
+        default: false
   push:
     branches:
       - main
   pull_request:
     branches:
       - main
-  schedule:
-    # GitHub suppresses push-triggered workflow runs resulting from GITHUB_TOKEN actions, 
-    # such as from .github/dependabot.yml.
-    - cron: '0 20 * * 0'
 
 permissions:
   contents: write
@@ -73,9 +74,10 @@ jobs:
         env:
           CHANNEL: ${{ github.ref == 'refs/heads/main' && 'stable' || 'beta' }}
           VERSION: ${{ github.event.inputs.version }}
+          FORCE: ${{ github.event.inputs.force || 'false' }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish
+          ./scripts/build.ps1 -Channel $env:CHANNEL -Version $env:VERSION -Publish -Force:([bool]::Parse($env:FORCE))
 
       - name: Clean up DNS zone
         if: always()

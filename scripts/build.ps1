@@ -1,5 +1,6 @@
 param(
     [switch]$Publish,
+    [switch]$Force,
     [switch]$SkipTests,
     [string]$Version = $null,
     [ValidateSet('stable', 'beta')]
@@ -40,6 +41,18 @@ $publishBranchName = 'publish'
 $publishWorktreePath = Join-Path $outputDirPath $publishBranchName
 $imageName = $Repository.ToLower()
 $standardChangelogHeadings = @('Added', 'Changed', 'Deprecated', 'Removed', 'Fixed', 'Security')
+# Paths whose changes affect what runs in production (the image) or what Home Assistant shows for the
+# add-on. Only changes to these trigger a release and require a changelog entry. Keep this list up to
+# date when adding new files that end up in the image or the published add-on config.
+$productionPathSpecs = @(
+    'src'
+    'Dockerfile'
+    'home-assistant/config.yaml'
+    'home-assistant/DOCS.md'
+    'home-assistant/icon.png'
+)
+$productionPathSpecArgs = ($productionPathSpecs | ForEach-Object { "'$_'" }) -join ' '
+$dependabotAuthorId = '49699333'
 
 function ConvertTo-ChangelogMarkdown($Sections) {
     $blocks = foreach ($heading in $standardChangelogHeadings) {
@@ -74,6 +87,7 @@ foreach ($heading in $standardChangelogHeadings) {
 }
 $unreleasedHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes((Get-Content $changelogPath -Raw)))) -Algorithm SHA256).Hash
 $mergedBody = $null
+$shouldPublish = $false
 
 if ($Publish) {
     $remotePublishRef = Exec "git -C $rootPath ls-remote origin $publishBranchName" -ReturnOutput
@@ -99,20 +113,48 @@ if ($Publish) {
         }
     }
 
+    if ($lastReleasedSha) {
+        git -C $rootPath cat-file -e "$lastReleasedSha^{commit}" 2>$null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Warning "Last released commit $lastReleasedSha was not found in history. Assuming production code has changed."
+            $lastReleasedSha = $null
+        }
+        $global:LASTEXITCODE = 0
+    }
+
+    if ($lastReleasedSha) {
+        $changedProductionFiles = @((Exec "git -C $rootPath diff --name-only $lastReleasedSha HEAD -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
+        $hasProductionChanges = $changedProductionFiles.Count -gt 0
+    }
+    else {
+        $hasProductionChanges = $true
+    }
+
     $commitRange = if ($lastReleasedSha) { "$lastReleasedSha..HEAD" } else { 'HEAD' }
-    $commitAuthorEmails = @((Exec "git -C $rootPath log $commitRange --format=%ae" -ReturnOutput) | Where-Object { $_ })
-    $humanCommitCount = @($commitAuthorEmails | Where-Object { $_ -notlike '*49699333*' }).Count
+    $commitAuthorEmails = @((Exec "git -C $rootPath log $commitRange --format=%ae -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
+    $humanCommitCount = @($commitAuthorEmails | Where-Object { $_ -notlike "*$dependabotAuthorId*" }).Count
     $unreleasedUnchanged = $storedHash -and ($storedHash -eq $unreleasedHash)
 
     if ($Channel -eq 'beta' -and $unreleasedUnchanged -and $humanCommitCount -gt 0) {
-        throw "home-assistant/unreleased.json hasn't changed since the last stable publish, but human commits exist since then. Did you forget to fill in the changelog delta?"
+        throw "home-assistant/unreleased.json hasn't changed since the last stable publish, but human commits touching production code exist since then. Did you forget to fill in the changelog delta?"
     }
 
-    $dependabotCommits = @((Exec "git -C $rootPath log $commitRange --author=49699333 --format=%s" -ReturnOutput) | Where-Object { $_ })
+    $dependabotCommits = @((Exec "git -C $rootPath log $commitRange --author=$dependabotAuthorId --format=%s -- $productionPathSpecArgs" -ReturnOutput) | Where-Object { $_ })
     if ($dependabotCommits.Count -gt 0) {
         $unreleasedSections.Changed += $dependabotCommits | ForEach-Object { "$($_.TrimEnd('.'))." }
     }
     $mergedBody = ConvertTo-ChangelogMarkdown $unreleasedSections
+
+    $shouldPublish = $hasProductionChanges -or $Force
+    if ($hasProductionChanges) {
+        Write-Host "Production code has changed since the last stable release. Publishing version $containerImageVersion." -ForegroundColor Cyan
+    }
+    elseif ($Force) {
+        Write-Host "No production code has changed since the last stable release, but -Force was given. Publishing version $containerImageVersion." -ForegroundColor Cyan
+    }
+    else {
+        Write-Host "No production code has changed since the last stable release ($($productionPathSpecs -join ', ')). Skipping publish; test and build only." -ForegroundColor Cyan
+    }
 }
 
 Task -Title Test -Skip:$SkipTests -Command {
@@ -125,7 +167,7 @@ Task -Title Test -Skip:$SkipTests -Command {
     Get-Content (Join-Path $codeCoverageReportDirPath Summary.txt)
 }
 
-Task -Title Login -Skip:(!$Publish) -Command {
+Task -Title Login -Skip:(!$shouldPublish) -Command {
     Exec "echo $env:GH_TOKEN | docker login $Registry -u automation --password-stdin"
 }
 
@@ -151,11 +193,11 @@ Task -Title Build -Command {
         "--label io.hass.arch=$haArch"
         "-t $gitHubImage"
     )
-    if ($Publish) { $build_args += '--push' }
+    if ($shouldPublish) { $build_args += '--push' }
     Exec "docker build $($build_args -join ' ') $rootPath"
 }
 
-Task -Title 'Publish add-on config' -Skip:(!$Publish) -Command {
+Task -Title 'Publish add-on config' -Skip:(!$shouldPublish) -Command {
     # The '$publishBranchName' branch is the repository's default branch and is intentionally
     # unprotected and has no branch-protection relationship to 'main'. Home Assistant fetches the
     # add-on repository's default branch, so every publish checks it out in a worktree, updates only
@@ -214,6 +256,7 @@ Task -Title 'Publish add-on config' -Skip:(!$Publish) -Command {
     $publishGitHubDirPath = Join-Path $publishWorktreePath .github
     New-Item $publishGitHubDirPath -ItemType Directory -Force | Out-Null
     Copy-Item $dependabotConfigPath (Join-Path $publishGitHubDirPath dependabot.yml)
+
     if ($Channel -eq 'stable') {
         $sourceCodeSection = "`n`n## Source code`n`nThis branch only contains the files Home Assistant needs to install the add-on. Source code, build`nscripts, and CI configuration live on the [``main``](https://github.com/$Organization/$Repository/tree/main) branch of this repository.`n"
         Set-Content (Join-Path $publishWorktreePath README.md) -Value ((Get-Content $docsPath -Raw) + $sourceCodeSection) -NoNewline
@@ -230,8 +273,11 @@ Task -Title 'Publish add-on config' -Skip:(!$Publish) -Command {
 Write-TaskSummary
 
 Write-Host "Image: $gitHubImage" -ForegroundColor Cyan
-if ($Publish) {
+if ($shouldPublish) {
     Write-Host "Published '$publishBranchName' branch ($Channel channel) with version $containerImageVersion." -ForegroundColor Cyan
+}
+elseif ($Publish) {
+    Write-Host "No production code changed since the last stable release, so nothing was published. Run with -Force to publish anyway." -ForegroundColor Cyan
 }
 else {
     Write-Host "Run with -Publish to push the image and publish this version to the '$publishBranchName' branch." -ForegroundColor Cyan
