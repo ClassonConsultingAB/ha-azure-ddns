@@ -33,7 +33,7 @@ When publishing, `build.ps1` merges this delta with the published `CHANGELOG.md`
 
 ## What triggers a release
 
-A release (image push and `publish` branch update) only happens when something that affects production has changed since the last stable release (the commit recorded in `CHANGELOG.sha` on `publish`):
+A release (image push and `publish` branch update) only happens when something that affects production has changed since the last stable release. Each stable publish writes `last-stable-release.json` to the root of `publish`, recording the source commit (`sourceCommit`) and the SHA256 of `home-assistant/unreleased.json` (`unreleasedJsonSha256`) at that release:
 
 | Production (triggers release) | Non-production (never triggers release)                                                        |
 | ----------------------------- | ---------------------------------------------------------------------------------------------- |
