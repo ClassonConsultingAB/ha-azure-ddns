@@ -1,8 +1,3 @@
-# Template for the scheduler workflow on the 'publish' branch (the repository's default branch).
-# GitHub only runs scheduled workflows from the default branch, so this file must be copied manually
-# to '.github/workflows/scheduled-build.yml' on 'publish' (GITHUB_TOKEN can't push workflow files).
-# It dispatches 'build-and-publish.yml' on 'main', which picks up e.g. Dependabot merges whose
-# push-triggered runs GitHub suppresses.
 name: Scheduled build
 
 on:
